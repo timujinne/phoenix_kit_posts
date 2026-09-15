@@ -563,7 +563,7 @@ defmodule PhoenixKitPosts.Migrations do
         {"UNIQUE", "phoenix_kit_post_tag_assignments_post_uuid_tag_uuid_index",
          q_post_tag_assignments, "btree", "post_uuid, tag_uuid"},
         {"", "phoenix_kit_post_groups_is_public_index", q_post_groups, "btree", "is_public"},
-        {"", "phoenix_kit_post_groups_position_index", q_post_groups, "btree", "position"},
+        {"", "phoenix_kit_post_groups_position_index", q_post_groups, "btree", "\"position\""},
         {"", "phoenix_kit_post_groups_user_uuid_idx", q_post_groups, "btree", "user_uuid"},
         {"UNIQUE", "phoenix_kit_post_groups_user_uuid_slug_index", q_post_groups, "btree",
          "user_uuid, slug"},

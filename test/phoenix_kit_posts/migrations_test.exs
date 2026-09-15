@@ -219,7 +219,7 @@ defmodule PhoenixKitPosts.MigrationsTest do
                "CREATE INDEX IF NOT EXISTS phoenix_kit_post_tag_assignments_tag_id_index ON public.phoenix_kit_post_tag_assignments USING btree (tag_uuid)",
                "CREATE UNIQUE INDEX IF NOT EXISTS phoenix_kit_post_tag_assignments_post_uuid_tag_uuid_index ON public.phoenix_kit_post_tag_assignments USING btree (post_uuid, tag_uuid)",
                "CREATE INDEX IF NOT EXISTS phoenix_kit_post_groups_is_public_index ON public.phoenix_kit_post_groups USING btree (is_public)",
-               "CREATE INDEX IF NOT EXISTS phoenix_kit_post_groups_position_index ON public.phoenix_kit_post_groups USING btree (position)",
+               "CREATE INDEX IF NOT EXISTS phoenix_kit_post_groups_position_index ON public.phoenix_kit_post_groups USING btree (\"position\")",
                "CREATE INDEX IF NOT EXISTS phoenix_kit_post_groups_user_uuid_idx ON public.phoenix_kit_post_groups USING btree (user_uuid)",
                "CREATE UNIQUE INDEX IF NOT EXISTS phoenix_kit_post_groups_user_uuid_slug_index ON public.phoenix_kit_post_groups USING btree (user_uuid, slug)",
                "CREATE INDEX IF NOT EXISTS phoenix_kit_post_group_assignments_group_id_index ON public.phoenix_kit_post_group_assignments USING btree (group_uuid)",

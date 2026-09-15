@@ -129,6 +129,9 @@ DROP TABLE phoenix_kit_post_groups;
 DROP TABLE phoenix_kit_posts;
 ```
 
+Dropping `phoenix_kit_posts` last also removes the `pkpo_schema:<N>` version
+marker, which is a `COMMENT` on that table — no separate step is needed.
+
 If you want to keep the tables (e.g. you plan to reinstall the module later)
 but stop this chain from tracking them, clear the version marker instead:
 
