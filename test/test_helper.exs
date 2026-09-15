@@ -10,9 +10,12 @@
 #
 #   createdb phoenix_kit_posts_test
 #
-# The posts tables live in CORE's versioned chain, not in this module — so the
-# schema is built by `PhoenixKit.Migration.ensure_current/2`, the same call a
-# host app makes. There is no module-owned DDL to run after it.
+# The posts tables still live in CORE's versioned chain (core creates every
+# one of them on every install), but their FUTURE shape belongs to this
+# module's own chain, `PhoenixKitPosts.Migrations`. The schema is built by
+# `PhoenixKit.Migration.ensure_current/2` first — the same call a host app
+# makes — then this module's own V1 on top, stamping every test run's
+# database `pkpo_schema:1`.
 
 # `test/support` is on elixirc_paths for :test (mix.exs), so the repo and case
 # are already compiled here — requiring the files as well would redefine both
@@ -37,6 +40,9 @@ repo_available =
     # question first.
     TestRepo.query!("SELECT 1")
     PhoenixKit.Migration.ensure_current(TestRepo, log: false)
+
+    PhoenixKitPosts.Migrations.up_statements()
+    |> Enum.each(&Ecto.Adapters.SQL.query!(TestRepo, &1, []))
 
     Ecto.Adapters.SQL.Sandbox.mode(TestRepo, :manual)
 
