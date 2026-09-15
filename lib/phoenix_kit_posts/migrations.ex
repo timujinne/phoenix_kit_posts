@@ -17,9 +17,11 @@ defmodule PhoenixKitPosts.Migrations do
   ## Ownership situation — read before touching
 
   All 13 `phoenix_kit_post*`/`phoenix_kit_comment_*` tables are core's
-  baseline: `V135` created all 13 in their pre-`time_zone` shape, `V168`
-  added the `(user_uuid, slug)` unique index on `phoenix_kit_post_groups`,
-  and `V185` added `phoenix_kit_posts.time_zone`. On every existing install
+  baseline: `V135` created all 13 in their pre-`time_zone` shape (with a
+  plain, non-unique `phoenix_kit_posts_slug_index`), `V167` made that index
+  UNIQUE (repairing any existing duplicate slugs first), `V168` added the
+  `(user_uuid, slug)` unique index on `phoenix_kit_post_groups`, and `V185`
+  added `phoenix_kit_posts.time_zone`. On every existing install
   all 13 already have their full current shape before this chain ever
   executes — this is an ADOPTION, not a create. Varchar widths are never
   restated as a second number: each owning schema's own `column_widths/0`
@@ -62,7 +64,7 @@ defmodule PhoenixKitPosts.Migrations do
 
   ### Phase 0 — this V1 adopts, and changes NOTHING
 
-  `CREATE TABLE IF NOT EXISTS` shape-identical to core's `V135`/`V168`/`V185`
+  `CREATE TABLE IF NOT EXISTS` shape-identical to core's `V135`/`V167`/`V168`/`V185`
   baseline, under core's exact object names (every pkey, index, and FK),
   then a **namespaced** marker stamp on the anchor table (`pkpo_schema:1` —
   an adopted table may already carry a foreign comment, so the reader must
@@ -279,14 +281,14 @@ defmodule PhoenixKitPosts.Migrations do
   @doc """
   The SQL `up/1` executes, as data — the testable single source. The
   ownership test suite parses these statements to prove that the object
-  names are core's `V135`/`V168`/`V185` names, that every `CREATE TABLE`
+  names are core's `V135`/`V167`/`V168`/`V185` names, that every `CREATE TABLE`
   stays shape-identical to core's `ExpectedSchema` manifest, that every
   varchar width is its owning schema's `column_widths/0`, and that nothing
   here can drop a table.
 
   `target` selects how much of the chain to emit (default
   `current_version/0`): `0` applies nothing (not an operation — clearing
-  the marker is `down/1`'s job); `1` is the pure `V135`/`V168`/`V185`-adoption
+  the marker is `down/1`'s job); `1` is the pure `V135`/`V167`/`V168`/`V185`-adoption
   step across all 13 tables.
   """
   @spec up_statements(String.t(), non_neg_integer()) :: [String.t()]
@@ -504,7 +506,7 @@ defmodule PhoenixKitPosts.Migrations do
       """
     ]
 
-    # Safety net for a host that ran core's V135/V168 but never V185 (table
+    # Safety net for a host that ran core's V135/V167/V168 but never V185 (table
     # exists, `time_zone` does not) — `CREATE TABLE IF NOT EXISTS` above
     # no-ops against the existing table and does not retroactively add the
     # column.

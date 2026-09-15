@@ -398,8 +398,9 @@ Ownership unfolds in three phases:
   `phoenix_kit_post_media`, `phoenix_kit_post_mentions`,
   `phoenix_kit_post_views`, `phoenix_kit_post_comments`,
   `phoenix_kit_comment_likes` and `phoenix_kit_comment_dislikes` still ship
-  in core's own chain (V135 baseline; the `(user_uuid, slug)` unique index
-  on `phoenix_kit_post_groups` from V168; `phoenix_kit_posts.time_zone` from
+  in core's own chain (V135 baseline; `phoenix_kit_posts_slug_index` made
+  UNIQUE by V167; the `(user_uuid, slug)` unique index on
+  `phoenix_kit_post_groups` from V168; `phoenix_kit_posts.time_zone` from
   V185) on every install. V1 re-asserts that exact shape idempotently
   (every pkey, index, and the full 24-FK set) and stamps the marker.
   Because no shape changes, core's `ExpectedSchema` manifest stays
