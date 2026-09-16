@@ -198,6 +198,17 @@ Repo-local aliases:
   authority, and `get_post_by_slug/2` uses `repo().one()`, which raises on
   duplicates. `PostTag` and `PostGroup` slug the same way (tag slug unique;
   group slug unique per `user_uuid`).
+- Column widths are the validation authority. Every `character varying(n)`
+  column a caller can write is bounded by its schema's `column_widths/0` — the
+  same map `PhoenixKitPosts.Migrations` builds its DDL from — and never by an
+  independent number. A changeset that allows more than the column does not
+  produce a form error, it produces a raw `22001` at insert time: the subtitle
+  was checked against 500 against a `varchar(255)` column, `repost_url` was not
+  checked at all, and a colliding 255-character title generated a 257-character
+  slug. `slugify/1` and `unique_slug/2` therefore pass `max_length:` to core's
+  `Slug`, which trims the base to make room for the `-2` suffix, and `Web.Edit`
+  clamps the `posts_max_title_length` / `posts_max_subtitle_length` counters to
+  the real widths so a setting above the column is absorbed, not advertised.
 - Post content is Markdown, rendered on the details page by MDEx with GFM
   extensions and `render: [unsafe: true]`, then passed through core's
   `HtmlSanitizer.sanitize/1`. Never render post HTML without the sanitizer.
@@ -271,6 +282,11 @@ Repo-local aliases:
   or dropped `only_if: ["scheduled"]` from the sweep/handler path. The
   compare-and-swap in `transition_to_public/2` is the guard; the
   `Integration.PublishPostTest` asserts one activity row.
+- A save that 500s with `Postgrex.Error ... 22001 string_data_right_truncation`
+  and no form error means a `validate_length/3` disagrees with its column: the
+  widths in `column_widths/0` are the authority and every writable varchar must
+  be bounded by one. `test/integration/column_width_test.exs` is the check; a
+  suite run without a database cannot see any of it.
 - `Ecto.MultipleResultsError` from `get_post_by_slug/2` means duplicate slugs
   got in; `unique_slug/2` rescues a missing repo into the unsuffixed slug, so
   a suite without a DB cannot see collisions. `Integration.SlugUniquenessTest`
@@ -365,7 +381,7 @@ checked in the LiveViews, not by core.
 | `posts_require_approval` | boolean | false | Require admin approval |
 | `posts_max_media` | integer | 10 | Max media attachments per post |
 | `posts_max_title_length` | integer | 255 | Max title character length |
-| `posts_max_subtitle_length` | integer | 500 | Max subtitle character length |
+| `posts_max_subtitle_length` | integer | 500 | Max subtitle character length (clamped to the `varchar(255)` column by `Web.Edit`) |
 | `posts_max_content_length` | integer | 50000 | Max content character length |
 | `posts_max_mentions` | integer | 10 | Max mentions per post |
 | `posts_max_tags` | integer | 20 | Max tags per post |
@@ -468,7 +484,27 @@ There is deliberately no automated uninstall path; see README.md
   a bundle that really is in `priv/` under a `PhoenixKitPosts*` global; and
   every `phx-hook="PhoenixKitPosts…"` in a template names a hook the bundle
   defines. All four fail when broken — verified by breaking them.
-- Known noise: none recorded.
+- `test/integration/migrations_shape_identity_test.exs` is the only check that
+  runs the module chain against a real database rather than against core's
+  `ExpectedSchema` manifest: it builds core's whole chain into one schema and
+  V1 from scratch into another (holding only stub `phoenix_kit_users` /
+  `phoenix_kit_files`), then diffs every column, index and constraint of the
+  13 tables out of Postgres' own catalogue. The manifest comparison in
+  `migrations_test.exs` is core describing itself — a manifest that drifted
+  from core's migrations would take this chain's DDL with it and both would
+  still agree. It is also the ONLY exercise of V1's `CREATE TABLE` statements,
+  which are no-ops on every install until core's Phase 2 squash.
+- `test/integration/column_width_test.exs` pins every writable
+  `character varying(n)` column to its schema's `column_widths/0`. The bug
+  class it guards is invisible without a DB: the changeset says `valid?` and
+  Postgres raises `22001` on the insert.
+- Known noise: a full-suite run may log one
+  `Settings read for "posts_enabled" exited: {:shutdown, "owner ... exited"}`
+  warning. It comes from `migrations_shape_identity_test.exs` running core's
+  whole chain a second time (under its own prefix) — core's migrations write
+  settings rows, and the read that follows can land after the test's sandbox
+  owner is gone. `enabled?/0` rescues it to `false`, no test fails, and it
+  does not appear when that file runs alone.
 
 ## Feature notes
 

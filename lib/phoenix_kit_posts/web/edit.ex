@@ -32,6 +32,7 @@ defmodule PhoenixKitPosts.Web.Edit do
   alias PhoenixKit.Users.Roles
   alias PhoenixKit.Utils.Routes
   alias PhoenixKit.Utils.Slug
+  alias PhoenixKitPosts.Post
   alias PhoenixKitPosts.Web.ScheduleInput
 
   # `get_editor_mode/0` only exists in newer phoenix_kit builds, but our pin
@@ -472,10 +473,22 @@ defmodule PhoenixKitPosts.Web.Edit do
 
     # Load settings
     max_media = String.to_integer(Settings.get_setting("posts_max_media", "10"))
-    max_title_length = String.to_integer(Settings.get_setting("posts_max_title_length", "255"))
+
+    # Clamped to the real column width: the counter and the `maxlength` these
+    # feed are what invite the user to type, and `Post.changeset/2` refuses
+    # anything the `varchar` cannot hold. A setting above the column is an
+    # operator mistake the form should absorb, not advertise.
+    widths = Post.column_widths()
+
+    max_title_length =
+      Settings.get_setting("posts_max_title_length", "255")
+      |> String.to_integer()
+      |> min(widths.title)
 
     max_subtitle_length =
-      String.to_integer(Settings.get_setting("posts_max_subtitle_length", "500"))
+      Settings.get_setting("posts_max_subtitle_length", "500")
+      |> String.to_integer()
+      |> min(widths.sub_title)
 
     max_content_length =
       String.to_integer(Settings.get_setting("posts_max_content_length", "50000"))

@@ -52,10 +52,11 @@ defmodule PhoenixKitPosts.PostGroup do
   @primary_key {:uuid, UUIDv7, autogenerate: true}
   @foreign_key_type UUIDv7
 
-  # Single shape authority for `PhoenixKitPosts.Migrations` — these widths
-  # coincide with core's V135 baseline shape, which `ExpectedSchema` audits;
-  # changing one is a chain version (V2+), never a second hard-coded number in
-  # the migration DDL.
+  # Single shape authority for `PhoenixKitPosts.Migrations` AND for
+  # `changeset/2`'s `validate_length/3` on the one column a caller can set
+  # directly (`slug`) — these widths coincide with core's V135 baseline shape,
+  # which `ExpectedSchema` audits; changing one is a chain version (V2+), never
+  # a second hard-coded number anywhere.
   @column_widths %{name: 255, slug: 255}
 
   @type t :: %__MODULE__{
@@ -146,6 +147,7 @@ defmodule PhoenixKitPosts.PostGroup do
     |> validate_length(:description, max: 1000)
     |> maybe_generate_slug()
     |> validate_required([:slug])
+    |> validate_length(:slug, max: @column_widths.slug)
     |> validate_format(:slug, ~r/^[a-z0-9-]+$/,
       message: "must be lowercase letters, numbers, and hyphens only"
     )

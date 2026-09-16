@@ -85,11 +85,11 @@ defmodule PhoenixKitPosts.Post do
   @primary_key {:uuid, UUIDv7, autogenerate: true}
   @foreign_key_type UUIDv7
 
-  # Single shape authority for `PhoenixKitPosts.Migrations` — these widths are
-  # the REAL `phoenix_kit_posts` column widths, not what `Post.changeset/2`
-  # validates (`sub_title` is checked against 500 there, but the column is
-  # `varchar(255)`); changing one is a chain version (V2+), never a second
-  # hard-coded number in the migration DDL.
+  # Single shape authority for `PhoenixKitPosts.Migrations` AND for
+  # `changeset/2`'s own `validate_length/3` calls — the column is the real
+  # limit, and a changeset that allows more just moves the failure from a form
+  # error to a raw `22001` at insert time. Changing one is a chain version
+  # (V2+), never a second hard-coded number anywhere.
   @column_widths %{
     title: 255,
     sub_title: 255,
@@ -223,9 +223,11 @@ defmodule PhoenixKitPosts.Post do
     |> validate_required([:user_uuid, :title, :content, :type, :status])
     |> validate_inclusion(:type, ["post", "snippet", "repost"])
     |> validate_inclusion(:status, ["draft", "public", "unlisted", "scheduled"])
-    |> validate_length(:title, max: 255)
-    |> validate_length(:sub_title, max: 500)
-    |> validate_length(:time_zone, max: 64)
+    |> validate_length(:title, max: @column_widths.title)
+    |> validate_length(:sub_title, max: @column_widths.sub_title)
+    |> validate_length(:repost_url, max: @column_widths.repost_url)
+    |> validate_length(:slug, max: @column_widths.slug)
+    |> validate_length(:time_zone, max: @column_widths.time_zone)
     |> validate_time_zone()
     |> validate_scheduled_at()
     |> maybe_generate_slug()
@@ -357,15 +359,25 @@ defmodule PhoenixKitPosts.Post do
   # splits one decision across two modules. It stays advisory: a concurrent
   # insert between this probe and the write is still possible, which is what
   # the database's own unique index is for.
+  #
+  # `:max_length` is the column's own width: without it `ensure_unique/3`
+  # appends the suffix to a slug already at the ceiling, and Postgres raises
+  # `22001` rather than truncating (core's `Slug` documents exactly this).
   defp unique_slug(slug, own_uuid) do
-    Slug.ensure_unique(slug, fn candidate ->
-      query = from(p in __MODULE__, where: p.slug == ^candidate)
+    ensure_unique_opts = [max_length: @column_widths.slug]
 
-      query =
-        if own_uuid, do: from(p in query, where: p.uuid != ^own_uuid), else: query
+    Slug.ensure_unique(
+      slug,
+      fn candidate ->
+        query = from(p in __MODULE__, where: p.slug == ^candidate)
 
-      PhoenixKit.RepoHelper.repo().exists?(query)
-    end)
+        query =
+          if own_uuid, do: from(p in query, where: p.uuid != ^own_uuid), else: query
+
+        PhoenixKit.RepoHelper.repo().exists?(query)
+      end,
+      ensure_unique_opts
+    )
   rescue
     # No repo configured, or it is unreachable. Slug generation is not the
     # place to take an application down, and the unsuffixed slug is what this
@@ -386,5 +398,6 @@ defmodule PhoenixKitPosts.Post do
   # `transliterate: true` is redundant under core 2.0 (romanization is always on
   # and the option is accepted-and-ignored for source compatibility), kept so
   # this reads the same as every other slug site in the umbrella.
-  defp slugify(title), do: Slug.slugify(title, transliterate: true)
+  defp slugify(title),
+    do: Slug.slugify(title, transliterate: true, max_length: @column_widths.slug)
 end
