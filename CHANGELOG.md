@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-09-16
 
 ### Changed
 
@@ -60,6 +60,47 @@
   adoptions across `phoenix_kit_*` packages (after `phoenix_kit_dashboards`
   and `phoenix_kit_warehouse`) that today rely entirely on core's versioned
   chain for their own tables.
+
+### Added
+
+- **`test/integration/migrations_shape_identity_test.exs`** — the chain checked
+  against a real database instead of a description of one. Core's whole chain
+  builds into one schema, V1 builds from scratch into another holding only stub
+  `phoenix_kit_users` / `phoenix_kit_files` tables, and every column, index and
+  constraint of the 13 tables is diffed out of Postgres' own catalogue. The
+  existing manifest comparison is core describing itself; this is the arbiter
+  disagreeing with both if they drift. It is also the only exercise of V1's
+  `CREATE TABLE` statements, which are no-ops on every install until core's
+  Phase 2 baseline squash makes them the only thing that builds these tables.
+- **`test/integration/column_width_test.exs`** — every writable
+  `character varying(n)` column pinned to its schema's `column_widths/0`.
+
+### Fixed
+
+- **A subtitle, repost URL or generated slug wider than its column no longer
+  500s the editor.** Three `character varying` columns were validated against
+  numbers that disagreed with the database, so the changeset reported
+  `valid?` and Postgres then raised `22001 string_data_right_truncation` on
+  the insert — an unhandled `Postgrex.Error` rather than a form error.
+  `Post.changeset/2` now drives every `validate_length/3` from
+  `column_widths/0`, the same map the migration chain builds its DDL from:
+
+    * `sub_title` was checked against **500** against a `varchar(255)` column,
+      and the editor's own character counter and `maxlength` came from
+      `posts_max_subtitle_length`, whose default is 500 — the page actively
+      invited the input that broke it. `Web.Edit` now clamps both the title
+      and subtitle limits to the real column widths, so a setting above the
+      column is absorbed rather than advertised.
+    * `repost_url` had no length bound at all, against a `varchar(255)`
+      column. A repost URL with a long query string is ordinary.
+    * A second post sharing a 255-character title produced a 257-character
+      slug: `Slug.ensure_unique/2` appended `-2` to a slug already at the
+      column's ceiling. Both `slugify/1` and `unique_slug/2` now pass
+      `max_length:`, which trims the base to make room for the suffix — the
+      hazard core's own `Slug` documents.
+    * `PostGroup` and `PostTag` accepted an explicit slug wider than their
+      columns (generated ones are safe — they derive from a `name` capped at
+      100).
 
 ## 0.4.0 - 2026-09-06
 
