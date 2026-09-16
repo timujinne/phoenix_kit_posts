@@ -85,6 +85,21 @@ defmodule PhoenixKitPosts.Post do
   @primary_key {:uuid, UUIDv7, autogenerate: true}
   @foreign_key_type UUIDv7
 
+  # Single shape authority for `PhoenixKitPosts.Migrations` — these widths are
+  # the REAL `phoenix_kit_posts` column widths, not what `Post.changeset/2`
+  # validates (`sub_title` is checked against 500 there, but the column is
+  # `varchar(255)`); changing one is a chain version (V2+), never a second
+  # hard-coded number in the migration DDL.
+  @column_widths %{
+    title: 255,
+    sub_title: 255,
+    type: 255,
+    status: 255,
+    repost_url: 255,
+    slug: 255,
+    time_zone: 64
+  }
+
   @type t :: %__MODULE__{
           uuid: UUIDv7.t() | nil,
           user_uuid: UUIDv7.t() | nil,
@@ -159,6 +174,15 @@ defmodule PhoenixKitPosts.Post do
 
     timestamps(type: :utc_datetime)
   end
+
+  @doc """
+  The `character varying(N)` widths `PhoenixKitPosts.Migrations` builds its
+  `CREATE TABLE`/`ADD COLUMN` DDL from — the single source of truth so the
+  migration chain, this schema, and core's `ExpectedSchema` manifest can never
+  independently disagree on a number.
+  """
+  @spec column_widths() :: %{atom() => pos_integer()}
+  def column_widths, do: @column_widths
 
   @doc """
   Changeset for creating or updating a post.

@@ -99,6 +99,46 @@ Settings are managed through the PhoenixKit Settings API and can be configured v
 | `posts_max_mentions` | integer | `10` | Max mentions per post |
 | `posts_max_tags` | integer | `20` | Max tags per post |
 
+### Removing this module
+
+There is deliberately **no automated uninstall**. `PhoenixKitPosts.Migrations.down/1`
+never drops any of the 13 `phoenix_kit_post*`/`phoenix_kit_comment_*` tables
+or a row in them, for any target version — a host that merely removes this
+dependency from `mix.exs` has not consented to deleting every user's posts,
+likes, tags, groups, media, mentions, views and legacy comments, and a
+migration whose result depended on which packages happen to be compiled in
+would be nondeterministic (it would break core's manifest, chain hash, and
+squash verification). Removing the data is therefore a deliberate, manual
+operator step, in FK-safe order (children before parents):
+
+```sql
+-- Only after removing :phoenix_kit_posts from mix.exs, and only if you
+-- actually want every post and everything attached to it gone for good.
+DROP TABLE phoenix_kit_comment_likes;
+DROP TABLE phoenix_kit_comment_dislikes;
+DROP TABLE phoenix_kit_post_comments;
+DROP TABLE phoenix_kit_post_media;
+DROP TABLE phoenix_kit_post_mentions;
+DROP TABLE phoenix_kit_post_views;
+DROP TABLE phoenix_kit_post_likes;
+DROP TABLE phoenix_kit_post_dislikes;
+DROP TABLE phoenix_kit_post_tag_assignments;
+DROP TABLE phoenix_kit_post_tags;
+DROP TABLE phoenix_kit_post_group_assignments;
+DROP TABLE phoenix_kit_post_groups;
+DROP TABLE phoenix_kit_posts;
+```
+
+Dropping `phoenix_kit_posts` last also removes the `pkpo_schema:<N>` version
+marker, which is a `COMMENT` on that table — no separate step is needed.
+
+If you want to keep the tables (e.g. you plan to reinstall the module later)
+but stop this chain from tracking them, clear the version marker instead:
+
+```sql
+COMMENT ON TABLE phoenix_kit_posts IS NULL;
+```
+
 ## Documentation
 
 Generate docs locally with:

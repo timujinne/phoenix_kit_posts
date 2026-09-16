@@ -43,6 +43,12 @@ defmodule PhoenixKitPosts.PostView do
 
   @primary_key {:uuid, UUIDv7, autogenerate: true}
 
+  # Single shape authority for `PhoenixKitPosts.Migrations` — these widths
+  # coincide with core's V135 baseline shape, which `ExpectedSchema` audits;
+  # changing one is a chain version (V2+), never a second hard-coded number in
+  # the migration DDL.
+  @column_widths %{ip_address: 255, user_agent_hash: 255, session_id: 255}
+
   @type t :: %__MODULE__{
           uuid: UUIDv7.t() | nil,
           post_uuid: UUIDv7.t(),
@@ -77,6 +83,15 @@ defmodule PhoenixKitPosts.PostView do
 
     timestamps(type: :utc_datetime)
   end
+
+  @doc """
+  The `character varying(N)` widths `PhoenixKitPosts.Migrations` builds its
+  `CREATE TABLE`/`ADD COLUMN` DDL from — the single source of truth so the
+  migration chain, this schema, and core's `ExpectedSchema` manifest can never
+  independently disagree on a number.
+  """
+  @spec column_widths() :: %{atom() => pos_integer()}
+  def column_widths, do: @column_widths
 
   @doc """
   Changeset for creating a post view record.

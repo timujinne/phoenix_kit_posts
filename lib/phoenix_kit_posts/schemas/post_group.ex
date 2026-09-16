@@ -52,6 +52,12 @@ defmodule PhoenixKitPosts.PostGroup do
   @primary_key {:uuid, UUIDv7, autogenerate: true}
   @foreign_key_type UUIDv7
 
+  # Single shape authority for `PhoenixKitPosts.Migrations` — these widths
+  # coincide with core's V135 baseline shape, which `ExpectedSchema` audits;
+  # changing one is a chain version (V2+), never a second hard-coded number in
+  # the migration DDL.
+  @column_widths %{name: 255, slug: 255}
+
   @type t :: %__MODULE__{
           uuid: UUIDv7.t() | nil,
           user_uuid: UUIDv7.t() | nil,
@@ -96,6 +102,15 @@ defmodule PhoenixKitPosts.PostGroup do
 
     timestamps(type: :utc_datetime)
   end
+
+  @doc """
+  The `character varying(N)` widths `PhoenixKitPosts.Migrations` builds its
+  `CREATE TABLE`/`ADD COLUMN` DDL from — the single source of truth so the
+  migration chain, this schema, and core's `ExpectedSchema` manifest can never
+  independently disagree on a number.
+  """
+  @spec column_widths() :: %{atom() => pos_integer()}
+  def column_widths, do: @column_widths
 
   @doc """
   Changeset for creating or updating a group.

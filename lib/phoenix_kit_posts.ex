@@ -149,6 +149,12 @@ defmodule PhoenixKitPosts do
   @impl PhoenixKit.Module
   def version, do: @version
 
+  # phoenix_kit_posts' future shape now belongs to this chain — see
+  # PhoenixKitPosts.Migrations. Core's V135/V167/V168/V185 baseline still
+  # creates the V1-adopted shape on every install; nothing else changes.
+  @impl PhoenixKit.Module
+  def migration_module, do: PhoenixKitPosts.Migrations
+
   @impl PhoenixKit.Module
   def permission_metadata do
     %{

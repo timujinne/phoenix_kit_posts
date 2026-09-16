@@ -52,8 +52,11 @@ standalone Phoenix app.
 - Per-view rows: view tracking is the denormalized `view_count`, bumped once
   per connected visit to the details page. The `PostView` schema
   (`phoenix_kit_post_views`) is not written by anything.
-- Database migrations: every table ships in core's chain (see Database &
-  migrations).
+- Writing NEW migrations for the 13 tables' CURRENT shape: they still ship in
+  core's chain (V135/V167/V168/V185) on every install. This module's own
+  chain (see Database & migrations) owns their FUTURE shape and today only
+  adopts what core already created — it is not where a from-scratch table
+  would be added.
 - Its own editor or media picker: the editor is core's Leaf component and the
   picker is core's `MediaSelectorModal`. The module's one JS bundle
   (`js_sources/0`) carries a single hook, the editor's media inserter.
@@ -280,6 +283,7 @@ lib/
   phoenix_kit_posts.ex                    # PhoenixKit.Module callbacks + the whole context
   phoenix_kit_posts/
     gettext.ex                            # PhoenixKitPosts.Gettext backend (priv/gettext)
+    migrations.ex                         # PhoenixKitPosts.Migrations: module-owned chain, V1 adopts core's 13 tables
     schemas/
       post.ex                             # Post: statuses, types, slug + time_zone rules
       post_like.ex, post_dislike.ex       # one row per (post_uuid, user_uuid)
@@ -373,18 +377,55 @@ PubSub topics: none.
 
 ## Database & migrations
 
-None. Tables `phoenix_kit_posts`, `phoenix_kit_post_likes`,
-`phoenix_kit_post_dislikes`, `phoenix_kit_post_tags`,
-`phoenix_kit_post_tag_assignments`, `phoenix_kit_post_groups`,
-`phoenix_kit_post_group_assignments`, `phoenix_kit_post_media`,
-`phoenix_kit_post_mentions`, `phoenix_kit_post_views`,
-`phoenix_kit_post_comments`, `phoenix_kit_comment_likes` and
-`phoenix_kit_comment_dislikes` ship in core's chain (V135 baseline;
-`phoenix_kit_posts.time_zone` from V185); `migration_module/0` is unset. A
-schema change is a core migration first (raise this module's core floor to
-the release that ships it, with the conformance test's lists), then schema
-edits here. UUIDv7 PKs and `use PhoenixKit.SchemaPrefix` on every table-backed
-schema.
+`migration_module/0` returns `PhoenixKitPosts.Migrations` — a module-owned
+versioned chain following core's dual-reader protocol
+(`migrated_version/1` for migration context, `migrated_version_runtime/1`
+for `mix phoenix_kit.update`; `up/1` re-reads the version before changing
+anything). The installed version is tracked as a `pkpo_schema:<N>` `COMMENT
+ON TABLE` marker on `phoenix_kit_posts` — this module's own hub table, the
+anchor for the whole 13-table chain even though `phoenix_kit_post_tags` is
+the one table in the set with no outgoing FK of its own. Varchar widths
+come from each owning schema's `column_widths/0` (`Post`, `PostComment`,
+`PostGroup`, `PostMention`, `PostTag`, `PostView`) — never a second
+hard-coded number in the migration DDL.
+
+Ownership unfolds in three phases:
+
+- **Phase 0 (current)** — V1 is pure ADOPTION, not a create. Tables
+  `phoenix_kit_posts`, `phoenix_kit_post_likes`, `phoenix_kit_post_dislikes`,
+  `phoenix_kit_post_tags`, `phoenix_kit_post_tag_assignments`,
+  `phoenix_kit_post_groups`, `phoenix_kit_post_group_assignments`,
+  `phoenix_kit_post_media`, `phoenix_kit_post_mentions`,
+  `phoenix_kit_post_views`, `phoenix_kit_post_comments`,
+  `phoenix_kit_comment_likes` and `phoenix_kit_comment_dislikes` still ship
+  in core's own chain (V135 baseline; `phoenix_kit_posts_slug_index` made
+  UNIQUE by V167; the `(user_uuid, slug)` unique index on
+  `phoenix_kit_post_groups` from V168; `phoenix_kit_posts.time_zone` from
+  V185) on every install. V1 re-asserts that exact shape idempotently
+  (every pkey, index, and the full 24-FK set) and stamps the marker.
+  Because no shape changes, core's `ExpectedSchema` manifest stays
+  accurate — no core release is required and there is no
+  release-ordering hazard.
+- **Phase 1 (a future V2+)** — the first real shape change (including
+  closing the 5 known-gap unique constraints this module's schemas already
+  assert via `unique_constraint/3` but core never backed with an index:
+  `post_likes`/`post_dislikes`/`post_mentions` on `(post_uuid, user_uuid)`,
+  `comment_likes`/`comment_dislikes` on `(comment_uuid, user_uuid)`)
+  requires first adding the altered objects to core's manifest generator's
+  `@excluded_exact` and regenerating `ExpectedSchema`, then raising this
+  module's core floor to that release. Skipping that step means `mix
+  phoenix_kit.repair` restores the old shape after every run.
+- **Phase 2 (a future core baseline squash)** — once core stops creating
+  these 13 tables for fresh installs, V1's `CREATE TABLE` statements become
+  the only thing that ever creates them from scratch, which is why `up/1`
+  already ensures `uuid_generate_v7()` (and its `pgcrypto` extension) exist
+  rather than assuming core's chain provided them.
+
+`down/1` can NEVER drop a table or a row in one, for any target including
+`0` — it only unstamps (or re-stamps) the marker on `phoenix_kit_posts`.
+There is deliberately no automated uninstall path; see README.md
+"Removing this module" for the manual operator SQL. UUIDv7 PKs and
+`use PhoenixKit.SchemaPrefix` on every table-backed schema.
 
 ## Testing
 
@@ -401,9 +442,11 @@ schema.
   `test_helper.exs` probes with `SELECT 1` first, because `start_link/0`
   succeeds lazily against a missing database.
 - Schema: `PhoenixKit.Migration.ensure_current(TestRepo, log: false)` builds
-  everything (no module chain). A `PhoenixKit.Migrations.BelowFloorError` is
-  re-raised, not folded into "no database", so a core below the floor fails
-  the run instead of skipping half of it. `Phoenix.PubSub` is started as
+  everything core owns, then this module's own chain on top
+  (`PhoenixKitPosts.Migrations.up_statements/2`, executed directly against
+  `TestRepo`). A `PhoenixKit.Migrations.BelowFloorError` is re-raised, not
+  folded into "no database", so a core below the floor fails the run
+  instead of skipping half of it. `Phoenix.PubSub` is started as
   `PhoenixKit.PubSub` because activity logging broadcasts.
 - Support: `PhoenixKitPosts.Test.Repo`; `DataCase` with `user_fixture/1`
   (inserts a `PhoenixKit.Users.Auth.User` directly, skipping the

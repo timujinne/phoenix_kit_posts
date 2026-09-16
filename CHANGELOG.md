@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The 13 `phoenix_kit_post*`/`phoenix_kit_comment_*` tables' future shape
+  now belongs to a module-owned migration chain**, `PhoenixKitPosts.Migrations`,
+  marker `pkpo_schema:<N>` on `phoenix_kit_posts`, following the canonical
+  dual-reader protocol documented by `phoenix_kit_hello_world` and used by
+  `phoenix_kit_dashboards`/`phoenix_kit_warehouse` (`migrated_version/1` for
+  migration context, `migrated_version_runtime/1` for `mix
+  phoenix_kit.update`; `up/1` re-reads the version before changing anything).
+  Varchar widths are sourced from each owning schema's `column_widths/0`
+  (`Post`, `PostComment`, `PostGroup`, `PostMention`, `PostTag`, `PostView`)
+  — the single shape authority — never restated as a second number.
+
+  Ownership unfolds in three phases:
+
+    * **Phase 0 (this release)** — V1 is an **adoption, not a create**: core's
+      V135/V167/V168/V185 baseline still creates all 13 tables (and
+      `phoenix_kit_posts.time_zone`) on every install, and V1 re-asserts that
+      exact shape idempotently — every pkey, index, and the full 24-FK set
+      (9 to `phoenix_kit_users`, 1 self-referential on
+      `phoenix_kit_post_comments`, 1 to `phoenix_kit_post_groups`, 1 to
+      `phoenix_kit_post_tags`, 2 to `phoenix_kit_files`, 8 to
+      `phoenix_kit_posts`, 2 to `phoenix_kit_post_comments`) — and stamps the
+      marker. Because no shape changes, core's `ExpectedSchema` stays
+      accurate — **no core release is required and there is no
+      release-ordering hazard**.
+    * **Phase 1 (a future V2+)** — the first real shape change requires first
+      adding the altered objects to core's manifest generator's
+      `@excluded_exact` and regenerating `ExpectedSchema`, then raising this
+      package's core floor to that release. Five unique constraints this
+      module's schemas already assert via `unique_constraint/3` but core
+      never backed with an index (`post_likes`/`post_dislikes`/
+      `post_mentions` on `(post_uuid, user_uuid)`, `comment_likes`/
+      `comment_dislikes` on `(comment_uuid, user_uuid)`) are a documented gap
+      left for that first real version, not fixed here.
+    * **Phase 2 (a future core baseline squash)** — once core stops creating
+      these tables for fresh installs, V1's `CREATE TABLE` statements become
+      the only thing that ever creates them from scratch, which is why
+      `up/1` already ensures `uuid_generate_v7()` (and its `pgcrypto`
+      extension) exist rather than assuming core's chain provided them.
+
+  **`down/1` can never drop a table, for any target including 0.** It
+  unstamps (or re-stamps) the marker on `phoenix_kit_posts` and nothing
+  else: the rows are every user's posts, likes, tags, groups, media,
+  mentions, views and legacy comments, and on most installs every table is
+  core-created. Test-pinned — no statement in either direction may match
+  `DROP`/`TRUNCATE`/`DELETE`. There is deliberately no automated uninstall
+  path; README.md's new "Removing this module" section gives the operator
+  manual SQL instead.
+
+  Existing hosts: upgrade, then `mix phoenix_kit.update`; it generates a
+  `posts_update_v00_to_v01.exs` migration that stamps `pkpo_schema:1` and
+  nothing else changes. New hosts and hosts without this module: unchanged.
+
+  This is the third of a planned series of similar module-owned-migration
+  adoptions across `phoenix_kit_*` packages (after `phoenix_kit_dashboards`
+  and `phoenix_kit_warehouse`) that today rely entirely on core's versioned
+  chain for their own tables.
+
 ## 0.4.0 - 2026-09-06
 
 ### Fixed
